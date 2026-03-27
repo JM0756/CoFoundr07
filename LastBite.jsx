@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 // ─── Font & global style injection ───────────────────────────────────────────
 ;(() => {
@@ -85,6 +85,17 @@ const SEED = [
 
 const CATS = ['All','Bakery','Hot Food','Drinks','Salads']
 const CAT_ICONS = { Bakery:'🥐', 'Hot Food':'🫕', Drinks:'☕', Salads:'🥗' }
+const IMPACT_STORAGE_KEY = 'lastbite-impact-v1'
+
+// Lightweight estimates to translate rescued units into impact metrics.
+const FOOD_LBS_PER_UNIT = {
+  Bakery: 0.40,
+  'Hot Food': 0.75,
+  Drinks: 0.55,
+  Salads: 0.70,
+}
+const DEFAULT_FOOD_LBS_PER_UNIT = 0.60
+const METHANE_CO2E_LBS_PER_FOOD_LB = 3.10
 
 let nextId = 10
 
@@ -92,6 +103,11 @@ let nextId = 10
 const fmt  = n => `$${n.toFixed(2)}`
 const disc = (o,s) => Math.round((1-s/o)*100)
 const tLeft= m => m >= 60 ? `${Math.floor(m/60)}h ${m%60>0?` ${m%60}m`:''}` : `${m}m`
+const calcFoodDivertedLbs = items => items.reduce((sum, item) => {
+  const perUnit = FOOD_LBS_PER_UNIT[item.cat] || DEFAULT_FOOD_LBS_PER_UNIT
+  return sum + perUnit * item.qty
+}, 0)
+const calcMethaneAvoidedLbs = foodLbs => foodLbs * METHANE_CO2E_LBS_PER_FOOD_LB
 
 // ─── Components ────────────────────────────────────────────────────────────────
 
@@ -281,6 +297,30 @@ export default function App() {
   const [showCart, setShowCart] = useState(false)
   const [toast, setToast]       = useState('')
   const [success, setSuccess]   = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
+  const [impact, setImpact] = useState({ foodLbs:0, methaneLbs:0, itemsRescued:0, orders:0 })
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(IMPACT_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (
+        typeof parsed.foodLbs === 'number' &&
+        typeof parsed.methaneLbs === 'number' &&
+        typeof parsed.itemsRescued === 'number' &&
+        typeof parsed.orders === 'number'
+      ) {
+        setImpact(parsed)
+      }
+    } catch {
+      // Ignore invalid localStorage content and start clean.
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(IMPACT_STORAGE_KEY, JSON.stringify(impact))
+  }, [impact])
 
   const fireToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
@@ -311,8 +351,23 @@ export default function App() {
   }
 
   const checkout = () => {
+    if (cart.length === 0) {
+      fireToast('Your bag is empty')
+      return
+    }
+    const rescuedItems = cart.reduce((sum, item) => sum + item.qty, 0)
+    const rescuedFoodLbs = calcFoodDivertedLbs(cart)
+    const methaneAvoidedLbs = calcMethaneAvoidedLbs(rescuedFoodLbs)
+
+    setImpact(prev => ({
+      foodLbs: prev.foodLbs + rescuedFoodLbs,
+      methaneLbs: prev.methaneLbs + methaneAvoidedLbs,
+      itemsRescued: prev.itemsRescued + rescuedItems,
+      orders: prev.orders + 1,
+    }))
     setCart([])
     setShowCart(false)
+    setSuccessMsg(`You diverted ${rescuedFoodLbs.toFixed(1)} lbs of food and avoided ${methaneAvoidedLbs.toFixed(1)} lbs CO2e methane emissions.`)
     setSuccess(true)
     setTimeout(() => setSuccess(false), 3500)
   }
@@ -321,6 +376,8 @@ export default function App() {
   const filtered   = filter === 'All' ? listings : listings.filter(l => l.cat === filter)
   const cartCount  = cart.reduce((s,c) => s + c.qty, 0)
   const cartSaved  = cart.reduce((s,c) => s + (c.orig - c.sale)*c.qty, 0)
+  const pendingFoodLbs = calcFoodDivertedLbs(cart)
+  const pendingMethaneLbs = calcMethaneAvoidedLbs(pendingFoodLbs)
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg, fontFamily:"'Outfit',sans-serif", color:C.text }}>
@@ -335,7 +392,7 @@ export default function App() {
       {/* ── Success Banner ──────────────────────────────────────────── */}
       {success && (
         <div style={{ position:'fixed', top:0, left:0, right:0, background:C.sage, color:'#fff', padding:'14px 24px', textAlign:'center', fontSize:15, fontWeight:500, zIndex:1000, animation:'fadeIn 0.3s ease' }}>
-          🎉 Order reserved! Head to the cafe to collect your food and reduce waste.
+          🎉 Order reserved! {successMsg}
         </div>
       )}
 
@@ -444,6 +501,41 @@ export default function App() {
               {cartSaved > 0 && (
                 <div style={{ padding:'10px 18px', background:C.sageLt, borderRadius:10, fontSize:13, color:C.sage, fontWeight:600, border:`1px solid ${C.borderMd}` }}>
                   🎉 You're saving {fmt(cartSaved)} today!
+                </div>
+              )}
+            </div>
+
+            {/* Personal impact dashboard */}
+            <div style={{ marginBottom:26 }}>
+              <div style={{ ...S.lora(19,700), color:C.forest, marginBottom:10 }}>Your Impact Dashboard</div>
+              <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+                <StatCard
+                  label="Food Diverted"
+                  value={`${impact.foodLbs.toFixed(1)} lbs`}
+                  sub="rescued from landfill"
+                  accent={C.sage}
+                />
+                <StatCard
+                  label="Methane Avoided"
+                  value={`${impact.methaneLbs.toFixed(1)} lbs CO2e`}
+                  sub="estimated emissions prevented"
+                  accent={C.terra}
+                />
+                <StatCard
+                  label="Items Rescued"
+                  value={impact.itemsRescued}
+                  sub="total surplus portions"
+                  accent={C.amber}
+                />
+                <StatCard
+                  label="Completed Orders"
+                  value={impact.orders}
+                  sub="impactful pickups"
+                />
+              </div>
+              {cartCount > 0 && (
+                <div style={{ marginTop:10, padding:'10px 14px', borderRadius:10, border:`1px solid ${C.borderMd}`, background:C.sageLt, fontSize:13, color:C.sage }}>
+                  If you checkout now: +{pendingFoodLbs.toFixed(1)} lbs food diverted and +{pendingMethaneLbs.toFixed(1)} lbs CO2e methane emissions avoided.
                 </div>
               )}
             </div>
