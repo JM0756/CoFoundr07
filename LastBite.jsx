@@ -69,16 +69,18 @@ const S = {
 }
 
 // ─── Mock data ─────────────────────────────────────────────────────────────────
+const DASHBOARD_CAFE = 'Starbucks · South End, Charlotte, NC'
+
 const SEED = [
-  { id:1,  name:'Sourdough Loaf',       cat:'Bakery',   orig:8.50, sale:3.00, qty:3, max:3, mins:90,  cafe:'The Corner Roast', icon:'🍞' },
-  { id:2,  name:'Almond Croissant',     cat:'Bakery',   orig:4.50, sale:1.50, qty:5, max:8, mins:45,  cafe:'The Corner Roast', icon:'🥐' },
-  { id:3,  name:'Banana Bread Slice',   cat:'Bakery',   orig:3.50, sale:1.20, qty:4, max:6, mins:80,  cafe:'The Corner Roast', icon:'🍌' },
-  { id:4,  name:'Veggie Quiche',        cat:'Hot Food', orig:7.00, sale:2.50, qty:2, max:4, mins:30,  cafe:'Bloom Café',       icon:'🥧' },
-  { id:5,  name:'Tomato Basil Soup',    cat:'Hot Food', orig:6.50, sale:2.20, qty:3, max:5, mins:40,  cafe:'Green Spoon',      icon:'🍲' },
-  { id:6,  name:'Oat Latte (Large)',    cat:'Drinks',   orig:5.50, sale:2.00, qty:8, max:10,mins:120, cafe:'Bloom Café',       icon:'☕' },
-  { id:7,  name:'Berry Smoothie',       cat:'Drinks',   orig:7.00, sale:2.50, qty:5, max:6, mins:150, cafe:'Bloom Café',       icon:'🫐' },
-  { id:8,  name:'Caesar Salad Box',     cat:'Salads',   orig:9.00, sale:3.50, qty:1, max:3, mins:60,  cafe:'Green Spoon',      icon:'🥗' },
-  { id:9,  name:'Chicken Pesto Wrap',   cat:'Hot Food', orig:8.00, sale:3.00, qty:4, max:6, mins:50,  cafe:'The Corner Roast', icon:'🫔' },
+  { id:1,  name:'Blueberry Muffin',           cat:'Bakery',   orig:4.95, sale:1.95, qty:3, max:5, mins:85,  cafe:'Starbucks · South End, Charlotte, NC',            icon:'🧁' },
+  { id:2,  name:'Butter Croissant',           cat:'Bakery',   orig:4.45, sale:1.75, qty:4, max:7, mins:60,  cafe:'Starbucks · South End, Charlotte, NC',            icon:'🥐' },
+  { id:3,  name:'Iced Caramel Macchiato',     cat:'Drinks',   orig:6.25, sale:2.75, qty:6, max:9, mins:100, cafe:'Starbucks · South End, Charlotte, NC',            icon:'🥤' },
+  { id:4,  name:'Pepperoni Slice',            cat:'Hot Food', orig:5.25, sale:2.20, qty:5, max:8, mins:40,  cafe:'Domino\'s · Uptown, Charlotte, NC',              icon:'🍕' },
+  { id:5,  name:'Garlic Parmesan Knots',      cat:'Hot Food', orig:6.00, sale:2.50, qty:3, max:6, mins:55,  cafe:'Domino\'s · University City, Charlotte, NC',     icon:'🧄' },
+  { id:6,  name:'Chicken Sandwich',           cat:'Hot Food', orig:6.85, sale:2.95, qty:4, max:7, mins:45,  cafe:'Chick-fil-A · SouthPark, Charlotte, NC',          icon:'🍔' },
+  { id:7,  name:'Waffle Fries',               cat:'Hot Food', orig:4.35, sale:1.85, qty:7, max:10,mins:70,  cafe:'Chick-fil-A · SouthPark, Charlotte, NC',          icon:'🍟' },
+  { id:8,  name:'Cobb Salad',                 cat:'Salads',   orig:9.45, sale:4.25, qty:2, max:4, mins:50,  cafe:'Chick-fil-A · University City, Charlotte, NC',    icon:'🥗' },
+  { id:9,  name:'Spinach, Feta & Egg Wrap',   cat:'Hot Food', orig:5.95, sale:2.40, qty:3, max:5, mins:65,  cafe:'Starbucks · South End, Charlotte, NC',            icon:'🌯' },
 ]
 
 const CATS = ['All','Bakery','Hot Food','Drinks','Salads']
@@ -302,7 +304,7 @@ export default function App() {
     setListings(prev => [...prev, {
       id: nextId++, name:form.name, cat:form.cat,
       orig:o, sale:sa, qty:parseInt(form.qty), max:parseInt(form.qty),
-      mins:120, cafe:'The Corner Roast', icon: CAT_ICONS[form.cat] || '🍽',
+      mins:120, cafe:DASHBOARD_CAFE, icon: CAT_ICONS[form.cat] || '🍽',
     }])
     setShowAdd(false)
     fireToast('Listing posted successfully!')
@@ -315,7 +317,7 @@ export default function App() {
     setTimeout(() => setSuccess(false), 3500)
   }
 
-  const myListings = listings.filter(l => l.cafe === 'The Corner Roast')
+  const myListings = listings.filter(l => l.cafe === DASHBOARD_CAFE)
   const filtered   = filter === 'All' ? listings : listings.filter(l => l.cat === filter)
   const cartCount  = cart.reduce((s,c) => s + c.qty, 0)
   const cartSaved  = cart.reduce((s,c) => s + (c.orig - c.sale)*c.qty, 0)
@@ -381,8 +383,8 @@ export default function App() {
           <div style={{ animation:'fadeIn 0.3s ease' }}>
             {/* Page header */}
             <div style={{ marginBottom:30 }}>
-              <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>The Corner Roast</div>
-              <div style={{ fontSize:14, color:C.muted }}>Manage surplus listings · reduce waste · earn revenue</div>
+              <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>{DASHBOARD_CAFE}</div>
+              <div style={{ fontSize:14, color:C.muted }}>Manage surplus listings · reduce waste · earn revenue in Charlotte, NC</div>
             </div>
 
             {/* Stats row */}
@@ -436,7 +438,7 @@ export default function App() {
               <div>
                 <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>Today's Surplus Deals</div>
                 <div style={{ fontSize:14, color:C.muted }}>
-                  {listings.filter(l=>l.qty>0).length} items available near you · pick up before they're gone
+                  {listings.filter(l=>l.qty>0).length} items available across Charlotte, NC · pick up before they're gone
                 </div>
               </div>
               {cartSaved > 0 && (
