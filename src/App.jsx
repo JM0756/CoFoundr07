@@ -60,6 +60,8 @@ const S = {
 
 const CATS = ['All','Bakery','Hot Food','Drinks','Salads']
 const CAT_ICONS = { Bakery:'🥐', 'Hot Food':'🫕', Drinks:'☕', Salads:'🥗' }
+const AUTH_USERS_KEY = 'lastbite-users-v1'
+const AUTH_SESSION_KEY = 'lastbite-session-v1'
 
 // Lightweight estimates to translate rescued units into impact metrics.
 const FOOD_LBS_PER_UNIT = {
@@ -259,9 +261,159 @@ function CartPanel({ cart, onRemove, onCheckout }) {
   )
 }
 
+function AuthGate({ onSignup, onLogin }) {
+  const [tab, setTab] = useState('signup')
+  const [authError, setAuthError] = useState('')
+  const [signup, setSignup] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'customer',
+    cafeName: '',
+  })
+  const [login, setLogin] = useState({
+    email: '',
+    password: '',
+  })
+
+  const submitSignup = () => {
+    const result = onSignup(signup)
+    if (!result.ok) {
+      setAuthError(result.message)
+    }
+  }
+
+  const submitLogin = () => {
+    const result = onLogin(login)
+    if (!result.ok) {
+      setAuthError(result.message)
+    }
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:C.bg, fontFamily:"'Outfit',sans-serif", color:C.text, display:'grid', placeItems:'center', padding:'24px' }}>
+      <div style={{ width:'min(860px, 100%)', display:'grid', gridTemplateColumns:'1.1fr 1fr', gap:16 }}>
+        <div style={{ ...S.card, background:C.forest, color:'#fff', border:'none', padding:'34px 30px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:22 }}>
+              <span style={{ fontSize:25 }}>🌿</span>
+              <span style={{ ...S.lora(28,700), color:'#fff' }}>LastBite</span>
+            </div>
+            <div style={{ ...S.lora(24,700), color:'#fff', marginBottom:8 }}>Sign up and choose your side</div>
+            <div style={{ fontSize:14, color:'rgba(255,255,255,0.82)', lineHeight:1.6 }}>
+              Create a customer account to discover surplus food deals,
+              or a cafe account to publish and manage your listings.
+            </div>
+          </div>
+          <div style={{ display:'grid', gap:10, marginTop:22 }}>
+            <div style={{ padding:'10px 12px', borderRadius:10, background:'rgba(255,255,255,0.13)', fontSize:13 }}>🧑‍🍳 Customer accounts open directly to marketplace deals.</div>
+            <div style={{ padding:'10px 12px', borderRadius:10, background:'rgba(255,255,255,0.13)', fontSize:13 }}>🏪 Cafe accounts open directly to listing dashboard.</div>
+          </div>
+        </div>
+
+        <div style={{ ...S.card, padding:'26px 24px' }}>
+          <div style={{ display:'flex', gap:8, marginBottom:18 }}>
+            <button style={S.pill(tab==='signup')} onClick={() => { setTab('signup'); setAuthError('') }}>Sign Up</button>
+            <button style={S.pill(tab==='login')} onClick={() => { setTab('login'); setAuthError('') }}>Log In</button>
+          </div>
+
+          {authError && (
+            <div style={{ marginBottom:14, padding:'10px 12px', borderRadius:9, fontSize:13, color:C.terra, background:C.terraLt }}>
+              {authError}
+            </div>
+          )}
+
+          {tab === 'signup' ? (
+            <div style={{ display:'grid', gap:12 }}>
+              <div>
+                <label style={S.label}>Full Name</label>
+                <input
+                  style={S.input}
+                  placeholder="Your name"
+                  value={signup.name}
+                  onChange={e => setSignup(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={S.label}>Email</label>
+                <input
+                  style={S.input}
+                  placeholder="name@email.com"
+                  type="email"
+                  value={signup.email}
+                  onChange={e => setSignup(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={S.label}>Password</label>
+                <input
+                  style={S.input}
+                  placeholder="At least 6 characters"
+                  type="password"
+                  value={signup.password}
+                  onChange={e => setSignup(prev => ({ ...prev, password: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label style={S.label}>I Am Signing Up As</label>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button style={S.pill(signup.role==='customer')} onClick={() => setSignup(prev => ({ ...prev, role:'customer' }))}>🧑‍🍳 Customer</button>
+                  <button style={S.pill(signup.role==='cafe', C.sage)} onClick={() => setSignup(prev => ({ ...prev, role:'cafe' }))}>🏪 Cafe</button>
+                </div>
+              </div>
+
+              {signup.role === 'cafe' && (
+                <div>
+                  <label style={S.label}>Cafe Name</label>
+                  <input
+                    style={S.input}
+                    placeholder="e.g. Sunrise Bakery · Charlotte, NC"
+                    value={signup.cafeName}
+                    onChange={e => setSignup(prev => ({ ...prev, cafeName: e.target.value }))}
+                  />
+                </div>
+              )}
+
+              <button style={{ ...S.btn('primary'), justifyContent:'center', marginTop:6 }} onClick={submitSignup}>
+                Create Account
+              </button>
+            </div>
+          ) : (
+            <div style={{ display:'grid', gap:12 }}>
+              <div>
+                <label style={S.label}>Email</label>
+                <input
+                  style={S.input}
+                  placeholder="name@email.com"
+                  type="email"
+                  value={login.email}
+                  onChange={e => setLogin(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={S.label}>Password</label>
+                <input
+                  style={S.input}
+                  placeholder="Your password"
+                  type="password"
+                  value={login.password}
+                  onChange={e => setLogin(prev => ({ ...prev, password: e.target.value }))}
+                />
+              </div>
+              <button style={{ ...S.btn('primary'), justifyContent:'center', marginTop:6 }} onClick={submitLogin}>
+                Log In
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [mode, setMode]         = useState('customer')
   const [listings, setListings] = useState([])
   const [cart, setCart]         = useState([])
   const [filter, setFilter]     = useState('All')
@@ -274,8 +426,98 @@ export default function App() {
   const [dashboardCafe, setDashboardCafe] = useState('Starbucks · South End, Charlotte, NC')
   const [isLoading, setIsLoading] = useState(true)
   const [requestError, setRequestError] = useState('')
+  const [users, setUsers] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
+
+  const mode = currentUser?.role || 'customer'
 
   const fireToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2800) }
+
+  useEffect(() => {
+    try {
+      const rawUsers = localStorage.getItem(AUTH_USERS_KEY)
+      const rawSession = localStorage.getItem(AUTH_SESSION_KEY)
+
+      const parsedUsers = rawUsers ? JSON.parse(rawUsers) : []
+      const safeUsers = Array.isArray(parsedUsers) ? parsedUsers : []
+      setUsers(safeUsers)
+
+      if (rawSession) {
+        const parsedSession = JSON.parse(rawSession)
+        const activeUser = safeUsers.find(user => user.id === parsedSession.userId)
+        if (activeUser) {
+          setCurrentUser(activeUser)
+        }
+      }
+    } catch {
+      // Ignore malformed local auth data and start with a clean session.
+    } finally {
+      setAuthReady(true)
+    }
+  }, [])
+
+  const handleSignup = payload => {
+    const name = payload.name?.trim()
+    const email = payload.email?.trim().toLowerCase()
+    const password = payload.password || ''
+    const role = payload.role === 'cafe' ? 'cafe' : 'customer'
+    const cafeName = payload.cafeName?.trim() || ''
+
+    if (!name || !email || password.length < 6) {
+      return { ok:false, message:'Please provide name, email, and a 6+ character password.' }
+    }
+
+    if (role === 'cafe' && !cafeName) {
+      return { ok:false, message:'Cafe accounts need a cafe name.' }
+    }
+
+    if (users.some(user => user.email === email)) {
+      return { ok:false, message:'An account with this email already exists. Try Log In.' }
+    }
+
+    const newUser = {
+      id: Date.now(),
+      name,
+      email,
+      password,
+      role,
+      cafeName: role === 'cafe' ? cafeName : '',
+    }
+
+    const nextUsers = [...users, newUser]
+    setUsers(nextUsers)
+    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(nextUsers))
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ userId:newUser.id }))
+    setCurrentUser(newUser)
+    fireToast(`Welcome to LastBite, ${newUser.name}!`)
+    return { ok:true }
+  }
+
+  const handleLogin = payload => {
+    const email = payload.email?.trim().toLowerCase()
+    const password = payload.password || ''
+
+    const matchedUser = users.find(user => user.email === email && user.password === password)
+    if (!matchedUser) {
+      return { ok:false, message:'Invalid email or password.' }
+    }
+
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ userId:matchedUser.id }))
+    setCurrentUser(matchedUser)
+    fireToast(`Welcome back, ${matchedUser.name}!`)
+    return { ok:true }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_SESSION_KEY)
+    setCurrentUser(null)
+    setCart([])
+    setShowCart(false)
+    setShowAdd(false)
+    setSuccess(false)
+    setRequestError('')
+  }
 
   const loadInitialData = async () => {
     setIsLoading(true)
@@ -288,7 +530,10 @@ export default function App() {
       ])
 
       setListings(listingResponse.listings)
-      setDashboardCafe(listingResponse.dashboardCafe || 'Starbucks · South End, Charlotte, NC')
+      const preferredCafe = currentUser?.role === 'cafe' && currentUser.cafeName
+        ? currentUser.cafeName
+        : (listingResponse.dashboardCafe || 'Starbucks · South End, Charlotte, NC')
+      setDashboardCafe(preferredCafe)
       setImpact(impactResponse.impact)
     } catch (error) {
       setRequestError(error.message || 'Unable to connect to the backend.')
@@ -300,12 +545,24 @@ export default function App() {
   const refreshListings = async () => {
     const listingResponse = await api.getListings()
     setListings(listingResponse.listings)
-    setDashboardCafe(listingResponse.dashboardCafe || 'Starbucks · South End, Charlotte, NC')
+    const preferredCafe = currentUser?.role === 'cafe' && currentUser.cafeName
+      ? currentUser.cafeName
+      : (listingResponse.dashboardCafe || 'Starbucks · South End, Charlotte, NC')
+    setDashboardCafe(preferredCafe)
   }
 
   useEffect(() => {
+    if (!authReady) {
+      return
+    }
+
+    if (!currentUser) {
+      setIsLoading(false)
+      return
+    }
+
     void loadInitialData()
-  }, [])
+  }, [authReady, currentUser])
 
   const addToCart = item => {
     if (item.qty <= 0) {
@@ -338,7 +595,10 @@ export default function App() {
 
   const addListing = async form => {
     try {
-      const response = await api.createListing(form)
+      const response = await api.createListing({
+        ...form,
+        cafe: currentUser?.role === 'cafe' ? currentUser.cafeName : undefined,
+      })
       setListings(prev => [...prev, response.listing])
       setShowAdd(false)
       fireToast('Listing posted successfully!')
@@ -375,6 +635,21 @@ export default function App() {
   const pendingFoodLbs = calcFoodDivertedLbs(cart)
   const pendingMethaneLbs = calcMethaneAvoidedLbs(pendingFoodLbs)
 
+  if (!authReady) {
+    return (
+      <div style={{ minHeight:'100vh', display:'grid', placeItems:'center', background:C.bg, color:C.text }}>
+        <div style={{ ...S.card, textAlign:'center', minWidth:320 }}>
+          <div style={{ ...S.lora(19), color:C.forest, marginBottom:6 }}>Loading LastBite...</div>
+          <div style={{ fontSize:14, color:C.muted }}>Preparing your account session.</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return <AuthGate onSignup={handleSignup} onLogin={handleLogin} />
+  }
+
   return (
     <div style={{ minHeight:'100vh', background:C.bg, fontFamily:"'Outfit',sans-serif", color:C.text }}>
 
@@ -402,29 +677,33 @@ export default function App() {
           <span style={{ fontSize:12, color:C.dimmed, marginLeft:2 }}>surplus food, happy planet</span>
         </div>
 
-        {/* Mode Toggle */}
-        <div style={{ display:'flex', background:C.bg, borderRadius:99, padding:5, gap:3, border:`1px solid ${C.border}` }}>
-          {[['customer','🧑‍🍳  I\'m Hungry'],['cafe','🏪  Cafe Dashboard']].map(([m, lbl]) => (
-            <button key={m} style={S.pill(mode===m)} onClick={() => setMode(m)}>{lbl}</button>
-          ))}
+        {/* Account Role */}
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <span style={S.pill(true, mode === 'cafe' ? C.sage : C.forest)}>
+            {mode === 'cafe' ? '🏪 Cafe Account' : '🧑‍🍳 Customer Account'}
+          </span>
+          <span style={{ fontSize:12, color:C.muted }}>
+            Signed in as {currentUser.name}
+          </span>
         </div>
 
-        {/* Cart button (customer only) */}
-        {mode === 'customer' ? (
-          <button
-            style={{ ...S.btn('terra'), position:'relative' }}
-            onClick={() => setShowCart(v => !v)}
-          >
-            🛍  Bag
-            {cartCount > 0 && (
-              <span style={{ background:'rgba(255,255,255,0.28)', borderRadius:99, padding:'1px 8px', fontSize:12, fontWeight:700 }}>
-                {cartCount}
-              </span>
-            )}
-          </button>
-        ) : (
-          <div style={{ width:100 }} />
-        )}
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          {/* Cart button (customer only) */}
+          {mode === 'customer' && (
+            <button
+              style={{ ...S.btn('terra'), position:'relative' }}
+              onClick={() => setShowCart(v => !v)}
+            >
+              🛍  Bag
+              {cartCount > 0 && (
+                <span style={{ background:'rgba(255,255,255,0.28)', borderRadius:99, padding:'1px 8px', fontSize:12, fontWeight:700 }}>
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          )}
+          <button style={S.btn('ghost')} onClick={handleLogout}>Log Out</button>
+        </div>
       </header>
 
       <main style={{ maxWidth:1240, margin:'0 auto', padding:'36px 28px' }}>
