@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 const DASHBOARD_CAFE = "Starbucks · South End, Charlotte, NC"
 
 const FOOD_LBS_PER_UNIT = {
@@ -38,6 +40,10 @@ let impact = {
   orders: 0,
 }
 
+let users = []
+let nextUserId = 1
+const sessions = new Map()
+
 const copy = (value) => JSON.parse(JSON.stringify(value))
 
 const calcFoodDivertedLbs = (items) =>
@@ -47,6 +53,100 @@ const calcFoodDivertedLbs = (items) =>
   }, 0)
 
 const calcMethaneAvoidedLbs = (foodLbs) => foodLbs * METHANE_CO2E_LBS_PER_FOOD_LB
+
+const sanitizeUser = (user) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  cafeName: user.cafeName || "",
+})
+
+const getUserById = (id) => users.find((user) => user.id === id)
+
+const createSessionForUser = (userId) => {
+  const token = randomUUID()
+  sessions.set(token, userId)
+  return token
+}
+
+const normalizeEmail = (email) => String(email || "").trim().toLowerCase()
+
+export function signupUser(payload) {
+  const name = String(payload.name || "").trim()
+  const email = normalizeEmail(payload.email)
+  const password = String(payload.password || "")
+  const role = payload.role === "cafe" ? "cafe" : "customer"
+  const cafeName = String(payload.cafeName || "").trim()
+
+  if (!name || !email || password.length < 6) {
+    throw new Error("Please provide name, email, and a 6+ character password")
+  }
+
+  if (role === "cafe" && !cafeName) {
+    throw new Error("Cafe accounts require a cafe name")
+  }
+
+  if (users.some((user) => user.email === email)) {
+    throw new Error("An account with this email already exists")
+  }
+
+  const user = {
+    id: nextUserId,
+    name,
+    email,
+    password,
+    role,
+    cafeName: role === "cafe" ? cafeName : "",
+  }
+
+  nextUserId += 1
+  users = [...users, user]
+
+  const token = createSessionForUser(user.id)
+  return {
+    token,
+    user: sanitizeUser(user),
+  }
+}
+
+export function loginUser(payload) {
+  const email = normalizeEmail(payload.email)
+  const password = String(payload.password || "")
+
+  const user = users.find((entry) => entry.email === email && entry.password === password)
+  if (!user) {
+    throw new Error("Invalid email or password")
+  }
+
+  const token = createSessionForUser(user.id)
+  return {
+    token,
+    user: sanitizeUser(user),
+  }
+}
+
+export function getUserFromToken(token) {
+  if (!token) {
+    return null
+  }
+
+  const userId = sessions.get(token)
+  if (!userId) {
+    return null
+  }
+
+  const user = getUserById(userId)
+  return user ? sanitizeUser(user) : null
+}
+
+export function logoutToken(token) {
+  if (!token) {
+    return false
+  }
+
+  return sessions.delete(token)
+}
 
 export function getListings(category) {
   if (!category || category === "All") {

@@ -7,6 +7,10 @@ import {
   getDashboardCafe,
   getImpact,
   getListings,
+  getUserFromToken,
+  loginUser,
+  logoutToken,
+  signupUser,
 } from "./data/store.js"
 
 const app = express()
@@ -15,8 +19,50 @@ const PORT = Number.parseInt(process.env.PORT, 10) || 4000
 app.use(cors())
 app.use(express.json())
 
+const getBearerToken = (req) => {
+  const header = req.headers.authorization || ""
+  if (!header.startsWith("Bearer ")) {
+    return ""
+  }
+  return header.slice(7).trim()
+}
+
 app.get("/api/health", (_, res) => {
   res.status(200).json({ status: "ok" })
+})
+
+app.post("/api/auth/signup", (req, res) => {
+  try {
+    const result = signupUser(req.body)
+    res.status(201).json(result)
+  } catch (error) {
+    res.status(400).json({ message: error.message })
+  }
+})
+
+app.post("/api/auth/login", (req, res) => {
+  try {
+    const result = loginUser(req.body)
+    res.status(200).json(result)
+  } catch (error) {
+    res.status(401).json({ message: error.message })
+  }
+})
+
+app.get("/api/auth/me", (req, res) => {
+  const token = getBearerToken(req)
+  const user = getUserFromToken(token)
+  if (!user) {
+    res.status(401).json({ message: "Invalid or expired session" })
+    return
+  }
+  res.status(200).json({ user })
+})
+
+app.post("/api/auth/logout", (req, res) => {
+  const token = getBearerToken(req)
+  logoutToken(token)
+  res.status(204).send()
 })
 
 app.get("/api/listings", (req, res) => {

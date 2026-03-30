@@ -1,11 +1,14 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "")
 
-async function request(path, init = {}) {
+async function request(path, options = {}) {
+  const { token, headers, ...init } = options
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(init.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(headers || {}),
     },
   })
 
@@ -23,6 +26,30 @@ async function request(path, init = {}) {
 }
 
 export const api = {
+  signup(payload) {
+    return request("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  },
+  login(payload) {
+    return request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  },
+  getMe(token) {
+    return request("/api/auth/me", {
+      method: "GET",
+      token,
+    })
+  },
+  logout(token) {
+    return request("/api/auth/logout", {
+      method: "POST",
+      token,
+    })
+  },
   getListings(category = "All") {
     const query = category && category !== "All" ? `?category=${encodeURIComponent(category)}` : ""
     return request(`/api/listings${query}`)

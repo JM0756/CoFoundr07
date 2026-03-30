@@ -60,8 +60,7 @@ const S = {
 
 const CATS = ['All','Bakery','Hot Food','Drinks','Salads']
 const CAT_ICONS = { Bakery:'🥐', 'Hot Food':'🫕', Drinks:'☕', Salads:'🥗' }
-const AUTH_USERS_KEY = 'lastbite-users-v1'
-const AUTH_SESSION_KEY = 'lastbite-session-v1'
+const AUTH_TOKEN_KEY = 'lastbite-auth-token-v1'
 
 // Lightweight estimates to translate rescued units into impact metrics.
 const FOOD_LBS_PER_UNIT = {
@@ -264,6 +263,7 @@ function CartPanel({ cart, onRemove, onCheckout }) {
 function AuthGate({ onSignup, onLogin }) {
   const [tab, setTab] = useState('signup')
   const [authError, setAuthError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [signup, setSignup] = useState({
     name: '',
     email: '',
@@ -276,18 +276,22 @@ function AuthGate({ onSignup, onLogin }) {
     password: '',
   })
 
-  const submitSignup = () => {
-    const result = onSignup(signup)
+  const submitSignup = async () => {
+    setIsSubmitting(true)
+    const result = await onSignup(signup)
     if (!result.ok) {
       setAuthError(result.message)
     }
+    setIsSubmitting(false)
   }
 
-  const submitLogin = () => {
-    const result = onLogin(login)
+  const submitLogin = async () => {
+    setIsSubmitting(true)
+    const result = await onLogin(login)
     if (!result.ok) {
       setAuthError(result.message)
     }
+    setIsSubmitting(false)
   }
 
   return (
@@ -375,8 +379,8 @@ function AuthGate({ onSignup, onLogin }) {
                 </div>
               )}
 
-              <button style={{ ...S.btn('primary'), justifyContent:'center', marginTop:6 }} onClick={submitSignup}>
-                Create Account
+              <button style={{ ...S.btn('primary'), justifyContent:'center', marginTop:6, opacity: isSubmitting ? 0.7 : 1 }} onClick={submitSignup} disabled={isSubmitting}>
+                {isSubmitting ? 'Creating Account...' : 'Create Account'}
               </button>
             </div>
           ) : (
@@ -401,8 +405,8 @@ function AuthGate({ onSignup, onLogin }) {
                   onChange={e => setLogin(prev => ({ ...prev, password: e.target.value }))}
                 />
               </div>
-              <button style={{ ...S.btn('primary'), justifyContent:'center', marginTop:6 }} onClick={submitLogin}>
-                Log In
+              <button style={{ ...S.btn('primary'), justifyContent:'center', marginTop:6, opacity: isSubmitting ? 0.7 : 1 }} onClick={submitLogin} disabled={isSubmitting}>
+                {isSubmitting ? 'Logging In...' : 'Log In'}
               </button>
             </div>
           )}
@@ -426,7 +430,7 @@ export default function App() {
   const [dashboardCafe, setDashboardCafe] = useState('Starbucks · South End, Charlotte, NC')
   const [isLoading, setIsLoading] = useState(true)
   const [requestError, setRequestError] = useState('')
-  const [users, setUsers] = useState([])
+  const [authToken, setAuthToken] = useState('')
   const [currentUser, setCurrentUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
 
@@ -435,88 +439,80 @@ export default function App() {
   const fireToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
   useEffect(() => {
-    try {
-      const rawUsers = localStorage.getItem(AUTH_USERS_KEY)
-      const rawSession = localStorage.getItem(AUTH_SESSION_KEY)
+    let isDisposed = false
 
-      const parsedUsers = rawUsers ? JSON.parse(rawUsers) : []
-      const safeUsers = Array.isArray(parsedUsers) ? parsedUsers : []
-      setUsers(safeUsers)
+    const restoreSession = async () => {
+      try {
+        const token = localStorage.getItem(AUTH_TOKEN_KEY) || ''
+        if (!token) {
+          return
+        }
 
-      if (rawSession) {
-        const parsedSession = JSON.parse(rawSession)
-        const activeUser = safeUsers.find(user => user.id === parsedSession.userId)
-        if (activeUser) {
-          setCurrentUser(activeUser)
+        const response = await api.getMe(token)
+        if (isDisposed) {
+          return
+        }
+
+        setAuthToken(token)
+        setCurrentUser(response.user)
+      } catch {
+        localStorage.removeItem(AUTH_TOKEN_KEY)
+      } finally {
+        if (!isDisposed) {
+          setAuthReady(true)
         }
       }
-    } catch {
-      // Ignore malformed local auth data and start with a clean session.
-    } finally {
-      setAuthReady(true)
+    }
+
+    void restoreSession()
+    return () => {
+      isDisposed = true
     }
   }, [])
 
-  const handleSignup = payload => {
-    const name = payload.name?.trim()
-    const email = payload.email?.trim().toLowerCase()
-    const password = payload.password || ''
-    const role = payload.role === 'cafe' ? 'cafe' : 'customer'
-    const cafeName = payload.cafeName?.trim() || ''
-
-    if (!name || !email || password.length < 6) {
-      return { ok:false, message:'Please provide name, email, and a 6+ character password.' }
+  const handleSignup = async payload => {
+    try {
+      const response = await api.signup(payload)
+      localStorage.setItem(AUTH_TOKEN_KEY, response.token)
+      setAuthToken(response.token)
+      setCurrentUser(response.user)
+      fireToast(`Welcome to LastBite, ${response.user.name}!`)
+      return { ok:true }
+    } catch (error) {
+      return { ok:false, message:error.message || 'Could not create account.' }
     }
-
-    if (role === 'cafe' && !cafeName) {
-      return { ok:false, message:'Cafe accounts need a cafe name.' }
-    }
-
-    if (users.some(user => user.email === email)) {
-      return { ok:false, message:'An account with this email already exists. Try Log In.' }
-    }
-
-    const newUser = {
-      id: Date.now(),
-      name,
-      email,
-      password,
-      role,
-      cafeName: role === 'cafe' ? cafeName : '',
-    }
-
-    const nextUsers = [...users, newUser]
-    setUsers(nextUsers)
-    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(nextUsers))
-    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ userId:newUser.id }))
-    setCurrentUser(newUser)
-    fireToast(`Welcome to LastBite, ${newUser.name}!`)
-    return { ok:true }
   }
 
-  const handleLogin = payload => {
-    const email = payload.email?.trim().toLowerCase()
-    const password = payload.password || ''
-
-    const matchedUser = users.find(user => user.email === email && user.password === password)
-    if (!matchedUser) {
-      return { ok:false, message:'Invalid email or password.' }
+  const handleLogin = async payload => {
+    try {
+      const response = await api.login(payload)
+      localStorage.setItem(AUTH_TOKEN_KEY, response.token)
+      setAuthToken(response.token)
+      setCurrentUser(response.user)
+      fireToast(`Welcome back, ${response.user.name}!`)
+      return { ok:true }
+    } catch (error) {
+      return { ok:false, message:error.message || 'Invalid email or password.' }
     }
-
-    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ userId:matchedUser.id }))
-    setCurrentUser(matchedUser)
-    fireToast(`Welcome back, ${matchedUser.name}!`)
-    return { ok:true }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem(AUTH_SESSION_KEY)
-    setCurrentUser(null)
-    setCart([])
-    setShowCart(false)
-    setShowAdd(false)
-    setSuccess(false)
-    setRequestError('')
+  const handleLogout = async () => {
+    try {
+      if (authToken) {
+        await api.logout(authToken)
+      }
+    } catch {
+      // Ignore logout endpoint issues and clear local session anyway.
+    } finally {
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      setAuthToken('')
+      setCurrentUser(null)
+      setCart([])
+      setShowCart(false)
+      setShowAdd(false)
+      setSuccess(false)
+      setRequestError('')
+    }
   }
 
   const loadInitialData = async () => {
@@ -702,7 +698,7 @@ export default function App() {
               )}
             </button>
           )}
-          <button style={S.btn('ghost')} onClick={handleLogout}>Log Out</button>
+          <button style={S.btn('ghost')} onClick={() => { void handleLogout() }}>Log Out</button>
         </div>
       </header>
 
