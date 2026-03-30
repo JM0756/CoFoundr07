@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run dev:full",
+    "dev:client": "vite",
+    "dev:server": "node backend/src/server.js",
+    "dev:full": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -15,11 +18,17 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "bugs": {
     "url": "https://github.com/JM0756/CoFoundr07/issues"
   },
   "homepage": "https://github.com/JM0756/CoFoundr07#readme",
   "dependencies": {
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "vite": "^8.0.3"

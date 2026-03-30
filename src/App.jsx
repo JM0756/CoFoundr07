@@ -1,15 +1,5 @@
-import { useEffect, useState } from "react"
-
-// ─── Font & global style injection ───────────────────────────────────────────
-;(() => {
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@300;400;500;600&display=swap'
-  document.head.appendChild(link)
-  const st = document.createElement('style')
-  st.textContent = `*{box-sizing:border-box;margin:0;padding:0}body{background:#F7F2E8;font-family:'Outfit',sans-serif}button{cursor:pointer;border:none;background:none;font-family:'Outfit',sans-serif}input,select,textarea{font-family:'Outfit',sans-serif;outline:none}@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}`
-  document.head.appendChild(st)
-})()
+import { useEffect, useState } from 'react'
+import { api } from './api/client'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -68,24 +58,8 @@ const S = {
   lora: (size, w=600) => ({ fontFamily:"'Lora',serif", fontSize:size, fontWeight:w }),
 }
 
-// ─── Mock data ─────────────────────────────────────────────────────────────────
-const DASHBOARD_CAFE = 'Starbucks · South End, Charlotte, NC'
-
-const SEED = [
-  { id:1,  name:'Blueberry Muffin',           cat:'Bakery',   orig:4.95, sale:1.95, qty:3, max:5, mins:85,  cafe:'Starbucks · South End, Charlotte, NC',            icon:'🧁' },
-  { id:2,  name:'Butter Croissant',           cat:'Bakery',   orig:4.45, sale:1.75, qty:4, max:7, mins:60,  cafe:'Starbucks · South End, Charlotte, NC',            icon:'🥐' },
-  { id:3,  name:'Iced Caramel Macchiato',     cat:'Drinks',   orig:6.25, sale:2.75, qty:6, max:9, mins:100, cafe:'Starbucks · South End, Charlotte, NC',            icon:'🥤' },
-  { id:4,  name:'Pepperoni Slice',            cat:'Hot Food', orig:5.25, sale:2.20, qty:5, max:8, mins:40,  cafe:'Domino\'s · Uptown, Charlotte, NC',              icon:'🍕' },
-  { id:5,  name:'Garlic Parmesan Knots',      cat:'Hot Food', orig:6.00, sale:2.50, qty:3, max:6, mins:55,  cafe:'Domino\'s · University City, Charlotte, NC',     icon:'🧄' },
-  { id:6,  name:'Chicken Sandwich',           cat:'Hot Food', orig:6.85, sale:2.95, qty:4, max:7, mins:45,  cafe:'Chick-fil-A · SouthPark, Charlotte, NC',          icon:'🍔' },
-  { id:7,  name:'Waffle Fries',               cat:'Hot Food', orig:4.35, sale:1.85, qty:7, max:10,mins:70,  cafe:'Chick-fil-A · SouthPark, Charlotte, NC',          icon:'🍟' },
-  { id:8,  name:'Cobb Salad',                 cat:'Salads',   orig:9.45, sale:4.25, qty:2, max:4, mins:50,  cafe:'Chick-fil-A · University City, Charlotte, NC',    icon:'🥗' },
-  { id:9,  name:'Spinach, Feta & Egg Wrap',   cat:'Hot Food', orig:5.95, sale:2.40, qty:3, max:5, mins:65,  cafe:'Starbucks · South End, Charlotte, NC',            icon:'🌯' },
-]
-
 const CATS = ['All','Bakery','Hot Food','Drinks','Salads']
 const CAT_ICONS = { Bakery:'🥐', 'Hot Food':'🫕', Drinks:'☕', Salads:'🥗' }
-const IMPACT_STORAGE_KEY = 'lastbite-impact-v1'
 
 // Lightweight estimates to translate rescued units into impact metrics.
 const FOOD_LBS_PER_UNIT = {
@@ -96,8 +70,6 @@ const FOOD_LBS_PER_UNIT = {
 }
 const DEFAULT_FOOD_LBS_PER_UNIT = 0.60
 const METHANE_CO2E_LBS_PER_FOOD_LB = 3.10
-
-let nextId = 10
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const fmt  = n => `$${n.toFixed(2)}`
@@ -290,7 +262,7 @@ function CartPanel({ cart, onRemove, onCheckout }) {
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [mode, setMode]         = useState('customer')
-  const [listings, setListings] = useState(SEED)
+  const [listings, setListings] = useState([])
   const [cart, setCart]         = useState([])
   const [filter, setFilter]     = useState('All')
   const [showAdd, setShowAdd]   = useState(false)
@@ -299,32 +271,47 @@ export default function App() {
   const [success, setSuccess]   = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [impact, setImpact] = useState({ foodLbs:0, methaneLbs:0, itemsRescued:0, orders:0 })
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(IMPACT_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (
-        typeof parsed.foodLbs === 'number' &&
-        typeof parsed.methaneLbs === 'number' &&
-        typeof parsed.itemsRescued === 'number' &&
-        typeof parsed.orders === 'number'
-      ) {
-        setImpact(parsed)
-      }
-    } catch {
-      // Ignore invalid localStorage content and start clean.
-    }
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem(IMPACT_STORAGE_KEY, JSON.stringify(impact))
-  }, [impact])
+  const [dashboardCafe, setDashboardCafe] = useState('Starbucks · South End, Charlotte, NC')
+  const [isLoading, setIsLoading] = useState(true)
+  const [requestError, setRequestError] = useState('')
 
   const fireToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
+  const loadInitialData = async () => {
+    setIsLoading(true)
+    setRequestError('')
+
+    try {
+      const [listingResponse, impactResponse] = await Promise.all([
+        api.getListings(),
+        api.getImpact(),
+      ])
+
+      setListings(listingResponse.listings)
+      setDashboardCafe(listingResponse.dashboardCafe || 'Starbucks · South End, Charlotte, NC')
+      setImpact(impactResponse.impact)
+    } catch (error) {
+      setRequestError(error.message || 'Unable to connect to the backend.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const refreshListings = async () => {
+    const listingResponse = await api.getListings()
+    setListings(listingResponse.listings)
+    setDashboardCafe(listingResponse.dashboardCafe || 'Starbucks · South End, Charlotte, NC')
+  }
+
+  useEffect(() => {
+    void loadInitialData()
+  }, [])
+
   const addToCart = item => {
+    if (item.qty <= 0) {
+      return
+    }
+
     setCart(prev => {
       const ex = prev.find(c => c.id === item.id)
       return ex ? prev.map(c => c.id===item.id ? {...c, qty:c.qty+1} : c) : [...prev, {...item, qty:1}]
@@ -339,40 +326,49 @@ export default function App() {
     setCart(prev => prev.filter(c => c.id !== id))
   }
 
-  const addListing = form => {
-    const o = parseFloat(form.orig), sa = parseFloat(form.sale)
-    setListings(prev => [...prev, {
-      id: nextId++, name:form.name, cat:form.cat,
-      orig:o, sale:sa, qty:parseInt(form.qty), max:parseInt(form.qty),
-      mins:120, cafe:DASHBOARD_CAFE, icon: CAT_ICONS[form.cat] || '🍽',
-    }])
-    setShowAdd(false)
-    fireToast('Listing posted successfully!')
+  const removeListing = async id => {
+    try {
+      await api.deleteListing(id)
+      setListings(prev => prev.filter(l => l.id !== id))
+      fireToast('Listing removed')
+    } catch (error) {
+      fireToast(error.message || 'Could not remove listing')
+    }
   }
 
-  const checkout = () => {
+  const addListing = async form => {
+    try {
+      const response = await api.createListing(form)
+      setListings(prev => [...prev, response.listing])
+      setShowAdd(false)
+      fireToast('Listing posted successfully!')
+    } catch (error) {
+      fireToast(error.message || 'Could not create listing')
+    }
+  }
+
+  const checkout = async () => {
     if (cart.length === 0) {
       fireToast('Your bag is empty')
       return
     }
-    const rescuedItems = cart.reduce((sum, item) => sum + item.qty, 0)
-    const rescuedFoodLbs = calcFoodDivertedLbs(cart)
-    const methaneAvoidedLbs = calcMethaneAvoidedLbs(rescuedFoodLbs)
 
-    setImpact(prev => ({
-      foodLbs: prev.foodLbs + rescuedFoodLbs,
-      methaneLbs: prev.methaneLbs + methaneAvoidedLbs,
-      itemsRescued: prev.itemsRescued + rescuedItems,
-      orders: prev.orders + 1,
-    }))
-    setCart([])
-    setShowCart(false)
-    setSuccessMsg(`You diverted ${rescuedFoodLbs.toFixed(1)} lbs of food and avoided ${methaneAvoidedLbs.toFixed(1)} lbs CO2e methane emissions.`)
-    setSuccess(true)
-    setTimeout(() => setSuccess(false), 3500)
+    try {
+      const result = await api.checkout(cart.map(item => ({ id: item.id, qty: item.qty })))
+      setImpact(result.impact)
+      setCart([])
+      setShowCart(false)
+      setSuccessMsg(`You diverted ${result.rescuedFoodLbs.toFixed(1)} lbs of food and avoided ${result.methaneAvoidedLbs.toFixed(1)} lbs CO2e methane emissions.`)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3500)
+      await refreshListings()
+    } catch (error) {
+      fireToast(error.message || 'Checkout failed')
+      await refreshListings()
+    }
   }
 
-  const myListings = listings.filter(l => l.cafe === DASHBOARD_CAFE)
+  const myListings = listings.filter(l => l.cafe === dashboardCafe)
   const filtered   = filter === 'All' ? listings : listings.filter(l => l.cat === filter)
   const cartCount  = cart.reduce((s,c) => s + c.qty, 0)
   const cartSaved  = cart.reduce((s,c) => s + (c.orig - c.sale)*c.qty, 0)
@@ -432,152 +428,169 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth:1240, margin:'0 auto', padding:'36px 28px' }}>
-
-        {/* ════════════════════════════════════════════════════════════
-            CAFE MODE
-        ════════════════════════════════════════════════════════════ */}
-        {mode === 'cafe' && (
-          <div style={{ animation:'fadeIn 0.3s ease' }}>
-            {/* Page header */}
-            <div style={{ marginBottom:30 }}>
-              <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>{DASHBOARD_CAFE}</div>
-              <div style={{ fontSize:14, color:C.muted }}>Manage surplus listings · reduce waste · earn revenue in Charlotte, NC</div>
+        {requestError && (
+          <div style={{ ...S.card, marginBottom:22, borderColor:C.terra, borderWidth:1.5, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:13, color:C.terra }}>
+              Unable to sync with backend: {requestError}
             </div>
-
-            {/* Stats row */}
-            <div style={{ display:'flex', gap:14, marginBottom:32, flexWrap:'wrap' }}>
-              <StatCard label="Active Listings"  value={myListings.length}                                              sub="items live now" />
-              <StatCard label="Units Available"  value={myListings.reduce((s,l) => s+l.qty, 0)}                        sub="across all listings"  accent={C.sage} />
-              <StatCard label="Food Saved Est."  value={`${(myListings.reduce((s,l)=>s+l.qty,0)*0.28).toFixed(1)} kg`} sub="from landfill today"  accent={C.amber} />
-              <StatCard label="Surplus Revenue"  value={fmt(myListings.reduce((s,l)=>s+l.sale*(l.max-l.qty),0))}       sub="earned from sales"    accent={C.terra} />
-            </div>
-
-            {/* Listings header + CTA */}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ ...S.lora(17), color:C.text }}>Active Listings ({myListings.length})</div>
-              {!showAdd && (
-                <button style={S.btn('primary')} onClick={() => setShowAdd(true)}>+ New Listing</button>
-              )}
-            </div>
-
-            {/* Add form */}
-            {showAdd && <AddForm onAdd={addListing} onCancel={() => setShowAdd(false)} />}
-
-            {/* Listing rows */}
-            {myListings.length === 0 && !showAdd ? (
-              <div style={{ ...S.card, textAlign:'center', padding:'52px 24px', color:C.muted }}>
-                <div style={{ fontSize:42, marginBottom:14 }}>📋</div>
-                <div style={{ ...S.lora(17), color:C.text, marginBottom:6 }}>No listings yet</div>
-                <div style={{ fontSize:14 }}>Click "New Listing" to post your first surplus item</div>
-              </div>
-            ) : myListings.map(item => (
-              <ListingRow key={item.id} item={item} onRemove={id => setListings(prev => prev.filter(l => l.id !== id))} />
-            ))}
-
-            {/* Info banner */}
-            <div style={{ marginTop:32, padding:'16px 22px', background:C.sageLt, borderRadius:12, border:`1px solid ${C.borderMd}`, display:'flex', gap:14, alignItems:'flex-start' }}>
-              <span style={{ fontSize:20, lineHeight:1 }}>💡</span>
-              <div>
-                <div style={{ fontSize:14, fontWeight:600, color:C.sage, marginBottom:3 }}>Reduce food waste, grow your reputation</div>
-                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>Listings appear to customers instantly. Items posted within 2 hours of closing sell 3× faster — add your end-of-day stock for maximum impact.</div>
-              </div>
-            </div>
+            <button style={S.btn('sm-ghost')} onClick={loadInitialData}>Retry</button>
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════
-            CUSTOMER MODE
-        ════════════════════════════════════════════════════════════ */}
-        {mode === 'customer' && (
-          <div style={{ animation:'fadeIn 0.3s ease' }}>
-            {/* Hero row */}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:26, flexWrap:'wrap', gap:12 }}>
-              <div>
-                <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>Today's Surplus Deals</div>
-                <div style={{ fontSize:14, color:C.muted }}>
-                  {listings.filter(l=>l.qty>0).length} items available across Charlotte, NC · pick up before they're gone
+        {isLoading ? (
+          <div style={{ ...S.card, textAlign:'center', padding:'56px 20px', color:C.muted }}>
+            <div style={{ ...S.lora(18), color:C.forest, marginBottom:6 }}>Loading marketplace...</div>
+            <div style={{ fontSize:14 }}>Connecting to backend and fetching latest listings.</div>
+          </div>
+        ) : (
+          <>
+            {/* ════════════════════════════════════════════════════════════
+                CAFE MODE
+            ════════════════════════════════════════════════════════════ */}
+            {mode === 'cafe' && (
+              <div style={{ animation:'fadeIn 0.3s ease' }}>
+                {/* Page header */}
+                <div style={{ marginBottom:30 }}>
+                  <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>{dashboardCafe}</div>
+                  <div style={{ fontSize:14, color:C.muted }}>Manage surplus listings · reduce waste · earn revenue in Charlotte, NC</div>
+                </div>
+
+                {/* Stats row */}
+                <div style={{ display:'flex', gap:14, marginBottom:32, flexWrap:'wrap' }}>
+                  <StatCard label="Active Listings"  value={myListings.length}                                              sub="items live now" />
+                  <StatCard label="Units Available"  value={myListings.reduce((s,l) => s+l.qty, 0)}                        sub="across all listings"  accent={C.sage} />
+                  <StatCard label="Food Saved Est."  value={`${(myListings.reduce((s,l)=>s+l.qty,0)*0.28).toFixed(1)} kg`} sub="from landfill today"  accent={C.amber} />
+                  <StatCard label="Surplus Revenue"  value={fmt(myListings.reduce((s,l)=>s+l.sale*(l.max-l.qty),0))}       sub="earned from sales"    accent={C.terra} />
+                </div>
+
+                {/* Listings header + CTA */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+                  <div style={{ ...S.lora(17), color:C.text }}>Active Listings ({myListings.length})</div>
+                  {!showAdd && (
+                    <button style={S.btn('primary')} onClick={() => setShowAdd(true)}>+ New Listing</button>
+                  )}
+                </div>
+
+                {/* Add form */}
+                {showAdd && <AddForm onAdd={addListing} onCancel={() => setShowAdd(false)} />}
+
+                {/* Listing rows */}
+                {myListings.length === 0 && !showAdd ? (
+                  <div style={{ ...S.card, textAlign:'center', padding:'52px 24px', color:C.muted }}>
+                    <div style={{ fontSize:42, marginBottom:14 }}>📋</div>
+                    <div style={{ ...S.lora(17), color:C.text, marginBottom:6 }}>No listings yet</div>
+                    <div style={{ fontSize:14 }}>Click "New Listing" to post your first surplus item</div>
+                  </div>
+                ) : myListings.map(item => (
+                  <ListingRow key={item.id} item={item} onRemove={removeListing} />
+                ))}
+
+                {/* Info banner */}
+                <div style={{ marginTop:32, padding:'16px 22px', background:C.sageLt, borderRadius:12, border:`1px solid ${C.borderMd}`, display:'flex', gap:14, alignItems:'flex-start' }}>
+                  <span style={{ fontSize:20, lineHeight:1 }}>💡</span>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:600, color:C.sage, marginBottom:3 }}>Reduce food waste, grow your reputation</div>
+                    <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>Listings appear to customers instantly. Items posted within 2 hours of closing sell 3× faster — add your end-of-day stock for maximum impact.</div>
+                  </div>
                 </div>
               </div>
-              {cartSaved > 0 && (
-                <div style={{ padding:'10px 18px', background:C.sageLt, borderRadius:10, fontSize:13, color:C.sage, fontWeight:600, border:`1px solid ${C.borderMd}` }}>
-                  🎉 You're saving {fmt(cartSaved)} today!
+            )}
+
+            {/* ════════════════════════════════════════════════════════════
+                CUSTOMER MODE
+            ════════════════════════════════════════════════════════════ */}
+            {mode === 'customer' && (
+              <div style={{ animation:'fadeIn 0.3s ease' }}>
+                {/* Hero row */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:26, flexWrap:'wrap', gap:12 }}>
+                  <div>
+                    <div style={{ ...S.lora(30,700), color:C.forest, marginBottom:5 }}>Today's Surplus Deals</div>
+                    <div style={{ fontSize:14, color:C.muted }}>
+                      {listings.filter(l=>l.qty>0).length} items available across Charlotte, NC · pick up before they're gone
+                    </div>
+                  </div>
+                  {cartSaved > 0 && (
+                    <div style={{ padding:'10px 18px', background:C.sageLt, borderRadius:10, fontSize:13, color:C.sage, fontWeight:600, border:`1px solid ${C.borderMd}` }}>
+                      🎉 You're saving {fmt(cartSaved)} today!
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Personal impact dashboard */}
-            <div style={{ marginBottom:26 }}>
-              <div style={{ ...S.lora(19,700), color:C.forest, marginBottom:10 }}>Your Impact Dashboard</div>
-              <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
-                <StatCard
-                  label="Food Diverted"
-                  value={`${impact.foodLbs.toFixed(1)} lbs`}
-                  sub="rescued from landfill"
-                  accent={C.sage}
-                />
-                <StatCard
-                  label="Methane Avoided"
-                  value={`${impact.methaneLbs.toFixed(1)} lbs CO2e`}
-                  sub="estimated emissions prevented"
-                  accent={C.terra}
-                />
-                <StatCard
-                  label="Items Rescued"
-                  value={impact.itemsRescued}
-                  sub="total surplus portions"
-                  accent={C.amber}
-                />
-                <StatCard
-                  label="Completed Orders"
-                  value={impact.orders}
-                  sub="impactful pickups"
-                />
-              </div>
-              {cartCount > 0 && (
-                <div style={{ marginTop:10, padding:'10px 14px', borderRadius:10, border:`1px solid ${C.borderMd}`, background:C.sageLt, fontSize:13, color:C.sage }}>
-                  If you checkout now: +{pendingFoodLbs.toFixed(1)} lbs food diverted and +{pendingMethaneLbs.toFixed(1)} lbs CO2e methane emissions avoided.
-                </div>
-              )}
-            </div>
-
-            {/* Category filter */}
-            <div style={{ display:'flex', gap:8, marginBottom:28, flexWrap:'wrap' }}>
-              {CATS.map(cat => (
-                <button key={cat} style={S.pill(filter===cat)} onClick={() => setFilter(cat)}>
-                  {cat !== 'All' && CAT_ICONS[cat] + '  '}{cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Content row: grid + cart */}
-            <div style={{ display:'flex', gap:24, alignItems:'flex-start' }}>
-
-              {/* Item grid */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))', gap:16 }}>
-                  {filtered.map(item => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      onAdd={addToCart}
-                      cartQty={(cart.find(c=>c.id===item.id)||{qty:0}).qty}
+                {/* Personal impact dashboard */}
+                <div style={{ marginBottom:26 }}>
+                  <div style={{ ...S.lora(19,700), color:C.forest, marginBottom:10 }}>Your Impact Dashboard</div>
+                  <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+                    <StatCard
+                      label="Food Diverted"
+                      value={`${impact.foodLbs.toFixed(1)} lbs`}
+                      sub="rescued from landfill"
+                      accent={C.sage}
                     />
+                    <StatCard
+                      label="Methane Avoided"
+                      value={`${impact.methaneLbs.toFixed(1)} lbs CO2e`}
+                      sub="estimated emissions prevented"
+                      accent={C.terra}
+                    />
+                    <StatCard
+                      label="Items Rescued"
+                      value={impact.itemsRescued}
+                      sub="total surplus portions"
+                      accent={C.amber}
+                    />
+                    <StatCard
+                      label="Completed Orders"
+                      value={impact.orders}
+                      sub="impactful pickups"
+                    />
+                  </div>
+                  {cartCount > 0 && (
+                    <div style={{ marginTop:10, padding:'10px 14px', borderRadius:10, border:`1px solid ${C.borderMd}`, background:C.sageLt, fontSize:13, color:C.sage }}>
+                      If you checkout now: +{pendingFoodLbs.toFixed(1)} lbs food diverted and +{pendingMethaneLbs.toFixed(1)} lbs CO2e methane emissions avoided.
+                    </div>
+                  )}
+                </div>
+
+                {/* Category filter */}
+                <div style={{ display:'flex', gap:8, marginBottom:28, flexWrap:'wrap' }}>
+                  {CATS.map(cat => (
+                    <button key={cat} style={S.pill(filter===cat)} onClick={() => setFilter(cat)}>
+                      {cat !== 'All' && CAT_ICONS[cat] + '  '}{cat}
+                    </button>
                   ))}
                 </div>
-                {filtered.length === 0 && (
-                  <div style={{ ...S.card, textAlign:'center', padding:'52px 24px', color:C.muted }}>
-                    <div style={{ fontSize:40, marginBottom:12 }}>🔍</div>
-                    <div style={{ fontSize:15 }}>No items in this category right now — check back soon!</div>
-                  </div>
-                )}
-              </div>
 
-              {/* Cart sidebar */}
-              {showCart && (
-                <CartPanel cart={cart} onRemove={removeFromCart} onCheckout={checkout} />
-              )}
-            </div>
-          </div>
+                {/* Content row: grid + cart */}
+                <div style={{ display:'flex', gap:24, alignItems:'flex-start' }}>
+
+                  {/* Item grid */}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))', gap:16 }}>
+                      {filtered.map(item => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          onAdd={addToCart}
+                          cartQty={(cart.find(c=>c.id===item.id)||{qty:0}).qty}
+                        />
+                      ))}
+                    </div>
+                    {filtered.length === 0 && (
+                      <div style={{ ...S.card, textAlign:'center', padding:'52px 24px', color:C.muted }}>
+                        <div style={{ fontSize:40, marginBottom:12 }}>🔍</div>
+                        <div style={{ fontSize:15 }}>No items in this category right now — check back soon!</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cart sidebar */}
+                  {showCart && (
+                    <CartPanel cart={cart} onRemove={removeFromCart} onCheckout={checkout} />
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
       </main>
